@@ -2,7 +2,6 @@ import os
 import subprocess
 import time
 from pytubefix import YouTube
-from pytubefix.cli import on_progress
 
 def clear_screen():
     """Clear the terminal screen"""
