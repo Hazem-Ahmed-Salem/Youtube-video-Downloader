@@ -1,5 +1,7 @@
 main.py
 venv
+.venv
+.env
 youtube_downloads
 __pycache__/
 
