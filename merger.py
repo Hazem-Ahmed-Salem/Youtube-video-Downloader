@@ -2,6 +2,7 @@ import subprocess
 import os
 import shutil
 import argparse
+from unittest import result
 
 
 def merge(video_path: str, audio_path: str, output_path: str = None, cleanup: bool = False) -> str:
@@ -55,7 +56,7 @@ def merge(video_path: str, audio_path: str, output_path: str = None, cleanup: bo
         temp_output_path
     ]
     
-    print(f"🎬 Merging video and audio...")
+    print("🎬 Merging video and audio...")
     print(f"   Video: {video_path}")
     print(f"   Audio: {audio_path}")
     print(f"   Output: {output_path}")
@@ -73,7 +74,7 @@ def merge(video_path: str, audio_path: str, output_path: str = None, cleanup: bo
             os.remove(video_path)
             shutil.move(temp_output_path, output_path)
         
-        print(f"✅ Successfully merged video and audio!")
+        print("✅ Successfully merged video and audio!")
         print(f"📄 File saved as: {output_path}")
         
         # Clean up audio file if requested (video already replaced if same as output)
@@ -93,7 +94,7 @@ def merge(video_path: str, audio_path: str, output_path: str = None, cleanup: bo
         # Clean up temp file on error
         if output_same_as_input and os.path.exists(temp_output_path):
             os.remove(temp_output_path)
-        print(f"❌ Error merging files!")
+        print("❌ Error merging files!")
         print(f"   FFmpeg stderr: {e.stderr}")
         raise RuntimeError(f"FFmpeg failed: {e.stderr}")
 

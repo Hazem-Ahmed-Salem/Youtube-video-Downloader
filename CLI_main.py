@@ -127,9 +127,7 @@ def download_with_audio_merge(yt, video_resolution):
         if not os.path.exists(download_folder):
             os.makedirs(download_folder)
         
-        # Create progress trackers
-        video_progress = DownloadProgress()
-        audio_progress = DownloadProgress()
+        
         
         # Download video
         print(f"\n📹 Downloading video ({video_resolution})...")
@@ -174,10 +172,10 @@ def download_with_audio_merge(yt, video_resolution):
         try:
             os.remove(video_path)
             os.remove(audio_path)
-        except:
+        except Exception:
             pass  # Ignore cleanup errors
         
-        print(f"✅ Successfully merged video and audio!")
+        print("✅ Successfully merged video and audio!")
         print(f"📄 File saved as: {final_filename}")
         return True
         
@@ -215,7 +213,6 @@ def download_youtube_video():
         
         # Get video-only and audio-only streams correctly
         video_only_streams = adaptive_streams.filter(type="video")
-        audio_only_streams = adaptive_streams.filter(type="audio")
         
         available_resolutions = get_available_resolutions(all_streams)
         
@@ -286,7 +283,7 @@ def download_youtube_video():
             print("-" * 50)
             
             selected_stream.download(output_path=download_folder)
-            print(f"\n\n✅ Download completed!")  # Extra newline after progress bar
+            print("\n\n✅ Download completed!")  # Extra newline after progress bar
             print(f"📄 File saved as: {selected_stream.default_filename}")
             
         else:
@@ -304,7 +301,7 @@ def download_youtube_video():
                         if video_stream.filesize:
                             print(f"💾 Size: {format_bytes(video_stream.filesize)}")
                         video_stream.download(output_path=download_folder)
-                        print(f"\n\n⚠️ Downloaded video only (no audio)")
+                        print("\n\n⚠️ Downloaded video only (no audio)")
             else:
                 print("❌ FFmpeg not found. Cannot merge audio for high resolution videos.")
                 print("🔧 Please install FFmpeg or choose a resolution with audio (720p or lower).")
@@ -358,7 +355,7 @@ def download_simple():
         
         stream.download(output_path=download_folder)
         
-        print(f"\n\n✅ Download completed!")  # Extra newline after progress bar
+        print("\n\n✅ Download completed!")  # Extra newline after progress bar
         print(f"📄 File saved as: {stream.default_filename}")
         
         input("\nPress Enter to continue...")
@@ -392,7 +389,7 @@ def show_video_info():
         print(f"⏱️ Duration: {yt.length} seconds ({yt.length//60}:{yt.length%60:02d})")
         print(f"👀 Views: {yt.views:,}")
         
-        print(f"\n🎯 Available Streams:")
+        print("\n🎯 Available Streams:")
         print("-" * 50)
         
         # Show progressive streams first (with audio)

@@ -18,7 +18,7 @@ from textual.screen import Screen
 from textual.binding import Binding
 from textual import work
 
-from TUI.utils import format_bytes, get_available_resolutions, has_ffmpeg
+from TUI.utils import get_available_resolutions, has_ffmpeg
 from TUI.widgets import VideoInfoPanel, DownloadProgressWidget
 
 try:
@@ -360,7 +360,7 @@ class AdvancedDownloadScreen(Screen):
     def complete_download(self, filename: str):
         progress = self.query_one("#progress-widget", DownloadProgressWidget)
         progress.set_complete("Merged successfully!")
-        self.log_message(f"✅ Download completed!")
+        self.log_message("✅ Download completed!")
         self.log_message(f"📄 File saved as: {filename}")
         
     def set_download_error(self, error: str):

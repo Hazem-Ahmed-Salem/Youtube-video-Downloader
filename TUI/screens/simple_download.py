@@ -190,7 +190,7 @@ class SimpleDownloadScreen(Screen):
     def complete_download(self, filename: str):
         progress = self.query_one("#progress-widget", DownloadProgressWidget)
         progress.set_complete()
-        self.log_message(f"✅ Download completed!")
+        self.log_message("✅ Download completed!")
         self.log_message(f"📄 File saved as: {filename}")
         
     def set_download_error(self, error: str):
