@@ -13,13 +13,14 @@ from textual.screen import Screen
 from textual.binding import Binding
 from textual import work
 
-from TUI.utils import format_bytes
+from TUI.utils import format_bytes, get_youtube_instance
 from TUI.widgets import VideoInfoPanel
 
 try:
-    from pytubefix import YouTube
+    from pytubefix import YouTube, exceptions
 except ImportError:
     YouTube = None
+    exceptions = None
 
 
 class VideoInfoScreen(Screen):
@@ -110,43 +111,60 @@ class VideoInfoScreen(Screen):
     def _load_info_task(self, url: str):
         try:
             self.app.call_from_thread(self.log_message, "⏳ Loading video information...")
-            yt = YouTube(url)
+            yt = get_youtube_instance(url)
             
+            all_streams = list(yt.streams)
+            video_streams = [s for s in all_streams if s.type == 'video' and s.resolution]
+            res_list = sorted(
+                set(s.resolution for s in video_streams),
+                key=lambda x: int(x.replace('p', '')) if x.replace('p', '').isdigit() else 0,
+                reverse=True
+            )
+            max_res = res_list[0] if res_list else None
+
             self.app.call_from_thread(
                 self.update_video_info,
-                yt.title, yt.author, yt.length, yt.views
+                yt.title, yt.author, yt.length, yt.views, max_res
             )
             
             # Get stream info
             streams_data = []
             
             # Progressive streams
-            progressive = yt.streams.filter(progressive=True, file_extension='mp4')
+            progressive = [s for s in all_streams if getattr(s, 'is_progressive', False)]
             for s in progressive:
                 size = format_bytes(s.filesize) if s.filesize else "Unknown"
                 streams_data.append(("✅ Progressive", s.resolution, s.mime_type, size))
                 
-            # Video only streams
-            video_only = yt.streams.filter(adaptive=True, type="video", file_extension='mp4')
+            # Video only streams (all formats, mp4 and webm)
+            video_only = [s for s in all_streams if getattr(s, 'is_adaptive', False) and s.type == 'video']
             for s in video_only:
                 size = format_bytes(s.filesize) if s.filesize else "Unknown"
-                streams_data.append(("🎬 Video Only", s.resolution, s.mime_type, size))
+                fps_str = f" ({s.fps}fps)" if hasattr(s, 'fps') and s.fps else ""
+                streams_data.append(("🎬 Video Only", f"{s.resolution}{fps_str}", s.mime_type, size))
                 
             # Audio only streams
-            audio_only = yt.streams.filter(adaptive=True, type="audio")
+            audio_only = [s for s in all_streams if s.type == 'audio']
             for s in audio_only:
                 size = format_bytes(s.filesize) if s.filesize else "Unknown"
-                streams_data.append(("🎵 Audio Only", s.abr, s.mime_type, size))
+                streams_data.append(("🎵 Audio Only", s.abr or "Audio", s.mime_type, size))
                 
             self.app.call_from_thread(self.update_streams_table, streams_data)
-            self.app.call_from_thread(self.log_message, f"✅ Loaded info for: {yt.title}")
+            self.app.call_from_thread(self.log_message, f"✅ Loaded info for: {yt.title} | Max: [bold green]{max_res}[/bold green]")
             
+        except (exceptions.BotDetection if exceptions else ()) as e:
+            self.app.call_from_thread(
+                self.log_message,
+                "❌ Bot detection error: YouTube detected automated traffic. Try again or check network/VPN."
+            )
+            self.app.call_from_thread(self.update_streams_table, [])
         except Exception as e:
             self.app.call_from_thread(self.log_message, f"❌ Error: {str(e)}")
+            self.app.call_from_thread(self.update_streams_table, [])
             
-    def update_video_info(self, title: str, author: str, duration: int, views: int):
+    def update_video_info(self, title: str, author: str, duration: int, views: int, max_res: str = None):
         info_panel = self.query_one("#video-info", VideoInfoPanel)
-        info_panel.update_info(title, author, duration, views)
+        info_panel.update_info(title, author, duration, views, max_res)
         
     def update_streams_table(self, streams_data: List[Tuple[str, str, str, str]]):
         table = self.query_one("#streams-table", DataTable)

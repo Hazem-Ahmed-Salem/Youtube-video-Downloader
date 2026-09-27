@@ -4,6 +4,17 @@ Utility functions for the YouTube Video Downloader TUI.
 
 import subprocess
 from typing import List
+from youtube_helper import (
+    get_youtube_instance,
+    is_stream_accessible,
+    get_available_resolutions,
+    get_best_video_stream,
+    get_best_audio_stream,
+    download_and_merge_streams,
+    clean_youtube_url,
+    extract_youtube_video_id,
+    is_playlist_url,
+)
 
 
 def format_bytes(bytes_val: int) -> str:
@@ -42,12 +53,3 @@ def has_ffmpeg() -> bool:
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
-
-
-def get_available_resolutions(streams) -> List[str]:
-    """Get all available resolutions for the video"""
-    resolutions = set()
-    for stream in streams:
-        if stream.resolution:
-            resolutions.add(stream.resolution)
-    return sorted(resolutions, key=lambda x: int(x.replace('p', '')), reverse=True)

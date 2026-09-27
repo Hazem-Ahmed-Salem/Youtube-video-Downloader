@@ -521,15 +521,15 @@ wheels = [
 
 [[package]]
 name = "pytubefix"
-version = "10.2.1"
+version = "10.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "nodejs-wheel-binaries" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/34/8b/7794e3585567f1d56441e582dd4a5e69698da87e3e195ee3925e23211f5e/pytubefix-10.2.1.tar.gz", hash = "sha256:bda2c7c7d65fdd8fd0c1fa0c497acbf4a3894340d8d203f38793be18def0a5bc", size = 1505362, upload-time = "2025-11-02T18:41:58.295Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/33/12/7c8bcedf3cb60a310420c8eabfbdeec81ba7fa4c11fa71e9c5a330539732/pytubefix-10.11.0.tar.gz", hash = "sha256:7fdba0a641aaf72b33df4983ddf26f5798f7e81e5fa72ae00d39bce99c821a99", size = 1523498, upload-time = "2026-07-29T02:11:40.86Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/36/d2/f72db2b2fbf4a7b823deef7d45ae63ced1c0e9d220e71bab25e9752423ab/pytubefix-10.2.1-py3-none-any.whl", hash = "sha256:32587cc2ef8cf526a4f0a59f7ca98694f2cea13ed3ca577555c988d02f50d12d", size = 1516084, upload-time = "2025-11-02T18:41:55.555Z" },
+    { url = "https://files.pythonhosted.org/packages/62/c6/b202c03110cf35b129483042692a7471da435d14d9d2b508963afaad9f90/pytubefix-10.11.0-py3-none-any.whl", hash = "sha256:d1b0a01f38853e9cdf3e047c91e82d022c9054650340e19f65fe4cb4af65d7f1", size = 1531538, upload-time = "2026-07-29T02:11:37.43Z" },
 ]
 
 [[package]]
@@ -714,6 +714,7 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "uc-micro-py" },
     { name = "yarl" },
+    { name = "yt-dlp" },
 ]
 
 [package.metadata]
@@ -737,11 +738,21 @@ requires-dist = [
     { name = "propcache", specifier = "==0.4.1" },
     { name = "pygments", specifier = "==2.19.2" },
     { name = "pytube", specifier = "==15.0.0" },
-    { name = "pytubefix", specifier = "==10.2.1" },
+    { name = "pytubefix", specifier = "==10.11.0" },
     { name = "rich", specifier = "==14.2.0" },
     { name = "termcolor", specifier = "==3.2.0" },
     { name = "textual", specifier = "==7.3.0" },
     { name = "typing-extensions", specifier = "==4.15.0" },
     { name = "uc-micro-py", specifier = "==1.0.3" },
     { name = "yarl", specifier = "==1.22.0" },
+    { name = "yt-dlp", specifier = ">=2024.8.0" },
+]
+
+[[package]]
+name = "yt-dlp"
+version = "2026.8.19"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/e0/832fa4ca334b766a06933a196066edc3dba37cdb6f14cd98d59bcc69a4b4/yt_dlp-2026.8.19.tar.gz", hash = "sha256:9e213e48cea35c66b378e4447903f118f6392a5fa380a2b6d7070ec86f4e0af1", size = 3052025, upload-time = "2026-08-19T23:48:59.291Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/69/b2/8cd1613f56eed7ceb64fbd4df3f1c01246bfb098e6f398228bafda22b80b/yt_dlp-2026.8.19-py3-none-any.whl", hash = "sha256:1d57897e94c6665a0a6f9bc54b34e584284e32c034ffab3a7df25d8f7b24eedf", size = 3185533, upload-time = "2026-08-19T23:48:56.925Z" },
 ]

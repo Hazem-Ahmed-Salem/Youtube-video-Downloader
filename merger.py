@@ -2,7 +2,6 @@ import subprocess
 import os
 import shutil
 import argparse
-from unittest import result
 
 
 def merge(video_path: str, audio_path: str, output_path: str = None, cleanup: bool = False) -> str:

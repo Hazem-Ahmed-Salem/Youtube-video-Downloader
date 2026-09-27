@@ -1,7 +1,14 @@
 import os
 import subprocess
 import time
-from pytubefix import YouTube
+from pytubefix import YouTube, exceptions
+from youtube_helper import (
+    get_youtube_instance,
+    get_available_resolutions,
+    get_best_video_stream,
+    get_best_audio_stream,
+)
+from merger import merge
 
 def clear_screen():
     """Clear the terminal screen"""
@@ -29,7 +36,8 @@ def format_speed(speed):
 
 class DownloadProgress:
     """Custom progress callback with speed calculation"""
-    def __init__(self):
+    def __init__(self, label="Progress"):
+        self.label = label
         self.start_time = None
         self.last_time = None
         self.last_bytes = 0
@@ -37,7 +45,8 @@ class DownloadProgress:
         
     def __call__(self, stream, chunk, bytes_remaining):
         current_time = time.time()
-        bytes_downloaded = stream.filesize - bytes_remaining
+        filesize = stream.filesize or (self.last_bytes + bytes_remaining)
+        bytes_downloaded = filesize - bytes_remaining
         
         # Initialize timing
         if self.start_time is None:
@@ -60,7 +69,7 @@ class DownloadProgress:
             avg_speed = sum(self.speeds) / len(self.speeds) if self.speeds else 0
             
             # Calculate progress percentage
-            percent = (bytes_downloaded / stream.filesize) * 100
+            percent = (bytes_downloaded / filesize) * 100 if filesize > 0 else 0
             
             # Calculate ETA
             if avg_speed > 0:
@@ -73,23 +82,15 @@ class DownloadProgress:
             
             # Create progress bar
             bar_length = 30
-            filled_length = int(bar_length * bytes_downloaded // stream.filesize)
+            filled_length = int(bar_length * bytes_downloaded // filesize) if filesize > 0 else 0
             bar = '█' * filled_length + '░' * (bar_length - filled_length)
             
             # Display progress
-            print(f"\r📥 Progress: [{bar}] {percent:.1f}% | 🚀 Speed: {format_speed(avg_speed)} | ⏱️ ETA: {eta_str} | 📊 {format_bytes(bytes_downloaded)}/{format_bytes(stream.filesize)}", end='', flush=True)
+            print(f"\r📥 {self.label}: [{bar}] {percent:.1f}% | 🚀 Speed: {format_speed(avg_speed)} | ⏱️ ETA: {eta_str} | 📊 {format_bytes(bytes_downloaded)}/{format_bytes(filesize)}", end='', flush=True)
         
         # Update last values
         self.last_time = current_time
         self.last_bytes = bytes_downloaded
-
-def get_available_resolutions(streams):
-    """Get all available resolutions for the video"""
-    resolutions = set()
-    for stream in streams:
-        if stream.resolution:
-            resolutions.add(stream.resolution)
-    return sorted(resolutions, key=lambda x: int(x.replace('p', '')), reverse=True)
 
 def has_ffmpeg():
     """Check if FFmpeg is installed and available"""
@@ -102,88 +103,60 @@ def has_ffmpeg():
 def download_with_audio_merge(yt, video_resolution):
     """Download video and audio separately, then merge with FFmpeg"""
     try:
-        print(f"🔄 Downloading {video_resolution} video and audio separately...")
-        
-        # Get the best video stream for the selected resolution
-        video_stream = yt.streams.filter(
-            adaptive=True, 
-            file_extension='mp4', 
-            type="video",
-            res=video_resolution
-        ).first()
-        
-        # Get the best audio stream
-        audio_stream = yt.streams.filter(
-            adaptive=True, 
-            type="audio",
-            file_extension='mp4'
-        ).order_by('abr').desc().first()
-        
+        print(f"🔄 Downloading {video_resolution} video and best audio separately...")
+
+        video_stream = get_best_video_stream(yt.streams, video_resolution)
+        audio_stream = get_best_audio_stream(yt.streams)
+
         if not video_stream or not audio_stream:
-            print("❌ Could not find suitable video or audio streams.")
+            print(f"❌ Could not find suitable video ({video_resolution}) or audio streams.")
             return False
         
         download_folder = "youtube_downloads"
         if not os.path.exists(download_folder):
             os.makedirs(download_folder)
-        
-        
+
+        v_ext = video_stream.subtype or 'mp4'
+        a_ext = audio_stream.subtype or 'mp4'
+
+        video_filename = f"temp_video_{video_stream.itag}.{v_ext}"
+        audio_filename = f"temp_audio_{audio_stream.itag}.{a_ext}"
+
+        video_path = os.path.join(download_folder, video_filename)
+        audio_path = os.path.join(download_folder, audio_filename)
         
         # Download video
-        print(f"\n📹 Downloading video ({video_resolution})...")
-        video_filename = f"temp_video_{video_stream.itag}.mp4"
-        video_path = os.path.join(download_folder, video_filename)
+        print(f"\n📹 Downloading video ({video_resolution}, {video_stream.mime_type})...")
+        video_progress = DownloadProgress(label="Video")
+        yt.register_on_progress_callback(video_progress)
         video_stream.download(output_path=download_folder, filename=video_filename)
         print()  # New line after progress
         
         # Download audio
-        print(f"🎵 Downloading audio ({audio_stream.abr})...")
-        audio_filename = f"temp_audio_{audio_stream.itag}.mp4"
-        audio_path = os.path.join(download_folder, audio_filename)
+        print(f"🎵 Downloading audio ({audio_stream.abr}, {audio_stream.mime_type})...")
+        audio_progress = DownloadProgress(label="Audio")
+        yt.register_on_progress_callback(audio_progress)
         audio_stream.download(output_path=download_folder, filename=audio_filename)
         print()  # New line after progress
         
         # Merge with FFmpeg
-        print("🔄 Merging video and audio...")
-        
-        # Clean filename of invalid characters
-        final_filename = f"{yt.title}.mp4"
-        final_filename = "".join(c for c in final_filename if c.isalnum() or c in (' ', '-', '_', '.'))
+        print("🔄 Merging video and audio with FFmpeg...")
+        safe_title = "".join(c for c in yt.title if c.isalnum() or c in (' ', '-', '_', '.')).strip()
+        if not safe_title:
+            safe_title = f"video_{getattr(yt, 'video_id', 'download')}"
+        final_filename = f"{safe_title}.mp4"
         final_path = os.path.join(download_folder, final_filename)
-        
-        ffmpeg_cmd = [
-            'ffmpeg', '-i', video_path, '-i', audio_path,
-            '-c', 'copy',
-            '-shortest',
-            '-y',
-            final_path
-        ]
-        
-        # Show FFmpeg progress (simple version)
-        print("Merging: [░░░░░░░░░░] 0%", end='', flush=True)
-        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
-        
-        if result.returncode == 0:
-            print("\rMerging: [██████████] 100%")
-        else:
-            print("\r❌ Merge failed")
-        
-        # Clean up temporary files
-        try:
-            os.remove(video_path)
-            os.remove(audio_path)
-        except Exception:
-            pass  # Ignore cleanup errors
-        
-        print("✅ Successfully merged video and audio!")
-        print(f"📄 File saved as: {final_filename}")
+
+        merge(
+            video_path=video_path,
+            audio_path=audio_path,
+            output_path=final_path,
+            cleanup=True
+        )
         return True
         
-    except subprocess.CalledProcessError:
-        print("❌ FFmpeg merge failed. Please check if FFmpeg is installed correctly.")
-        return False
     except Exception as e:
-        print(f"❌ Error during merge: {e}")
+        print(f"❌ Error during download & merge: {e}")
         return False
 
 def download_youtube_video():
@@ -199,25 +172,21 @@ def download_youtube_video():
             return
         
         print("⏳ Loading video information...")
-        yt = YouTube(url)
+        yt = get_youtube_instance(url)
         
         print(f"\n📹 Title: {yt.title}")
         print(f"👤 Author: {yt.author}")
         print(f"⏱️ Duration: {yt.length} seconds")
         print(f"👀 Views: {yt.views:,}")
         
-        # Get all streams
-        all_streams = yt.streams.filter(file_extension='mp4')
-        progressive_streams = all_streams.filter(progressive=True)
-        adaptive_streams = all_streams.filter(adaptive=True)
-        
-        # Get video-only and audio-only streams correctly
-        video_only_streams = adaptive_streams.filter(type="video")
-        
+        all_streams = list(yt.streams)
+        progressive_streams = [s for s in all_streams if getattr(s, 'is_progressive', False)]
+        video_only_streams = [s for s in all_streams if getattr(s, 'is_adaptive', False) and s.type == 'video']
+
         available_resolutions = get_available_resolutions(all_streams)
         
         if not available_resolutions:
-            print("❌ No MP4 streams available for this video.")
+            print("❌ No video streams available for this video.")
             return
         
         # Display available resolutions with audio info
@@ -232,16 +201,16 @@ def download_youtube_video():
             
             if progressive_available:
                 marker = "✅"
-                audio_info = "(Video+Audio)"
+                audio_info = "(Video+Audio directly)"
             elif adaptive_available and ffmpeg_available:
                 marker = "🔄"
-                audio_info = "(Video only - will merge with audio)"
+                audio_info = "(Full HD/HD - will merge with audio via FFmpeg)"
             elif adaptive_available:
                 marker = "🎬"
-                audio_info = "(Video only - no audio)"
+                audio_info = "(Video only - install FFmpeg for audio merge)"
             else:
                 marker = "❓"
-                audio_info = "(Unknown)"
+                audio_info = "(Available)"
             
             print(f"{i}. {resolution} {marker} {audio_info}")
         
@@ -267,12 +236,9 @@ def download_youtube_video():
         if not os.path.exists(download_folder):
             os.makedirs(download_folder)
         
-        # Create progress callback
-        progress_callback = DownloadProgress()
-        yt.register_on_progress_callback(progress_callback)
-        
-        # Try progressive stream first (has audio)
-        selected_stream = progressive_streams.filter(res=selected_resolution).first()
+        # Check if a progressive stream is available for this resolution
+        prog_matches = [s for s in progressive_streams if s.resolution == selected_resolution]
+        selected_stream = prog_matches[0] if prog_matches else None
         
         if selected_stream:
             # Progressive stream with audio
@@ -282,30 +248,31 @@ def download_youtube_video():
                 print(f"💾 Size: {format_bytes(selected_stream.filesize)}")
             print("-" * 50)
             
+            progress_callback = DownloadProgress(label="Progress")
+            yt.register_on_progress_callback(progress_callback)
             selected_stream.download(output_path=download_folder)
-            print("\n\n✅ Download completed!")  # Extra newline after progress bar
+            print("\n\n✅ Download completed!")
             print(f"📄 File saved as: {selected_stream.default_filename}")
             
         else:
-            # Adaptive stream (video only) - need to handle audio
+            # Adaptive stream (video only) - merge with audio using FFmpeg
             if ffmpeg_available:
-                # Try to download and merge
                 success = download_with_audio_merge(yt, selected_resolution)
                 if not success:
-                    print("❌ Failed to download with audio. Downloading video only...")
-                    # Fallback to video only
-                    video_stream = video_only_streams.filter(res=selected_resolution).first()
-                    if video_stream:
-                        print(f"\n📥 Downloading video only: {yt.title}")
-                        print(f"📊 Resolution: {selected_resolution} (video only)")
-                        if video_stream.filesize:
-                            print(f"💾 Size: {format_bytes(video_stream.filesize)}")
-                        video_stream.download(output_path=download_folder)
-                        print("\n\n⚠️ Downloaded video only (no audio)")
+                    print("❌ Failed to download and merge with audio.")
             else:
                 print("❌ FFmpeg not found. Cannot merge audio for high resolution videos.")
-                print("🔧 Please install FFmpeg or choose a resolution with audio (720p or lower).")
-                return
+                print("🔧 Please install FFmpeg or choose a resolution with audio (like 360p).")
+                download_video_only = input("Do you want to download video only without audio? (y/N): ").strip().lower()
+                if download_video_only == 'y':
+                    vid_stream = get_best_video_stream(all_streams, selected_resolution)
+                    if vid_stream:
+                        print(f"\n📥 Downloading video only: {yt.title}")
+                        print(f"📊 Resolution: {selected_resolution} (video only)")
+                        progress_callback = DownloadProgress(label="Video")
+                        yt.register_on_progress_callback(progress_callback)
+                        vid_stream.download(output_path=download_folder)
+                        print("\n\n⚠️ Downloaded video only (no audio)")
         
         input("\nPress Enter to continue...")
         
@@ -316,7 +283,7 @@ def download_youtube_video():
         input("\nPress Enter to continue...")
 
 def download_simple():
-    """Simple download - always gets the best quality with audio"""
+    """Simple download - always gets the highest quality available with audio (up to 4K/1080p)"""
     try:
         print("\n" + "="*50)
         print("🚀 SIMPLE DOWNLOAD (BEST QUALITY WITH AUDIO)")
@@ -328,35 +295,64 @@ def download_simple():
             return
         
         print("⏳ Loading video information...")
-        yt = YouTube(url)
+        yt = get_youtube_instance(url)
         
         print(f"\n📹 Title: {yt.title}")
         print(f"👤 Author: {yt.author}")
         
-        # Get the highest progressive stream (always has audio)
-        stream = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
-        
-        if not stream:
-            print("❌ No streams with audio available. Try the advanced download instead.")
-            return
-        
         download_folder = "youtube_downloads"
         if not os.path.exists(download_folder):
             os.makedirs(download_folder)
+
+        ffmpeg_available = has_ffmpeg()
+        all_streams = list(yt.streams)
         
-        # Create progress callback
-        progress_callback = DownloadProgress()
-        yt.register_on_progress_callback(progress_callback)
+        # Get highest resolution video stream available
+        best_video = get_best_video_stream(all_streams)
         
-        print(f"\n📥 Downloading: {stream.resolution} (with audio)")
-        if stream.filesize:
-            print(f"💾 Size: {format_bytes(stream.filesize)}")
-        print("-" * 50)
-        
-        stream.download(output_path=download_folder)
-        
-        print("\n\n✅ Download completed!")  # Extra newline after progress bar
-        print(f"📄 File saved as: {stream.default_filename}")
+        if not best_video:
+            print("❌ No video streams available.")
+            return
+
+        if getattr(best_video, 'is_progressive', False):
+            # Progressive stream
+            print(f"\n📥 Downloading best progressive stream: {best_video.resolution} (with audio)")
+            if best_video.filesize:
+                print(f"💾 Size: {format_bytes(best_video.filesize)}")
+            print("-" * 50)
+            progress_callback = DownloadProgress(label="Progress")
+            yt.register_on_progress_callback(progress_callback)
+            best_video.download(output_path=download_folder)
+            print("\n\n✅ Download completed!")
+            print(f"📄 File saved as: {best_video.default_filename}")
+        elif ffmpeg_available:
+            # Download highest resolution video (e.g. 1080p, 1440p, 4K) + best audio, and merge
+            print(f"\n🎯 Best resolution found: {best_video.resolution}")
+            success = download_with_audio_merge(yt, best_video.resolution)
+            if not success:
+                print("❌ Failed to download and merge best quality video.")
+        else:
+            # FFmpeg not available - fallback to highest progressive stream
+            prog_streams = [s for s in all_streams if getattr(s, 'is_progressive', False)]
+            if prog_streams:
+                prog_streams.sort(
+                    key=lambda s: int(s.resolution[:-1]) if s.resolution and s.resolution[:-1].isdigit() else 0,
+                    reverse=True
+                )
+                stream = prog_streams[0]
+                print(f"\n⚠️ FFmpeg not found! Falling back to highest progressive stream: {stream.resolution}")
+                print("💡 Install FFmpeg to download 1080p and higher resolutions with audio.")
+                progress_callback = DownloadProgress(label="Progress")
+                yt.register_on_progress_callback(progress_callback)
+                print(f"\n📥 Downloading: {stream.resolution} (with audio)")
+                if stream.filesize:
+                    print(f"💾 Size: {format_bytes(stream.filesize)}")
+                print("-" * 50)
+                stream.download(output_path=download_folder)
+                print("\n\n✅ Download completed!")
+                print(f"📄 File saved as: {stream.default_filename}")
+            else:
+                print("❌ No progressive stream available and FFmpeg is not installed.")
         
         input("\nPress Enter to continue...")
         
@@ -380,7 +376,7 @@ def show_video_info():
             return
         
         print("⏳ Loading video information...")
-        yt = YouTube(url)
+        yt = get_youtube_instance(url)
         
         print(f"\n📹 Title: {yt.title}")
         print(f"👤 Author: {yt.author}")
@@ -393,25 +389,26 @@ def show_video_info():
         print("-" * 50)
         
         # Show progressive streams first (with audio)
-        progressive_streams = yt.streams.filter(progressive=True, file_extension='mp4')
+        progressive_streams = [s for s in yt.streams if getattr(s, 'is_progressive', False)]
         if progressive_streams:
-            print("\n✅ Progressive Streams (Video + Audio):")
+            print("\n✅ Progressive Streams (Video + Audio directly):")
             for stream in progressive_streams:
                 filesize = f" - {format_bytes(stream.filesize)}" if stream.filesize else ""
                 print(f"  {stream.resolution} - {stream.mime_type}{filesize}")
         
         # Show adaptive video streams (video only)
-        video_streams = yt.streams.filter(adaptive=True, type="video", file_extension='mp4')
+        video_streams = [s for s in yt.streams if getattr(s, 'is_adaptive', False) and s.type == 'video']
         if video_streams:
-            print("\n🎬 Adaptive Video Streams (Video Only):")
+            print("\n🎬 Adaptive Video Streams (High Resolution - merged with audio):")
             for stream in video_streams:
                 filesize = f" - {format_bytes(stream.filesize)}" if stream.filesize else ""
-                print(f"  {stream.resolution} - {stream.mime_type}{filesize}")
+                fps_info = f" ({stream.fps}fps)" if hasattr(stream, 'fps') and stream.fps else ""
+                print(f"  {stream.resolution}{fps_info} - {stream.mime_type}{filesize}")
         
         # Show adaptive audio streams
-        audio_streams = yt.streams.filter(adaptive=True, type="audio")
+        audio_streams = [s for s in yt.streams if s.type == 'audio']
         if audio_streams:
-            print("\n🎵 Adaptive Audio Streams:")
+            print("\n🎵 Audio Streams:")
             for stream in audio_streams:
                 filesize = f" - {format_bytes(stream.filesize)}" if stream.filesize else ""
                 print(f"  {stream.abr} - {stream.mime_type}{filesize}")

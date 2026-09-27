@@ -38,20 +38,24 @@ class VideoInfoPanel(Static):
     def compose(self) -> ComposeResult:
         yield Static("📹 No video loaded", id="video-info-content")
         
-    def update_info(self, title: str, author: str, duration: int, views: int):
+    def update_info(self, title: str, author: str, duration: int, views: int, max_res: str = None):
         self.video_data = {
             "title": title,
             "author": author,
             "duration": duration,
-            "views": views
+            "views": views,
+            "max_res": max_res
         }
         content = self.query_one("#video-info-content", Static)
-        info_text = (
-            f"[bold cyan]📹 Title:[/bold cyan] {title}\n"
-            f"[bold cyan]👤 Author:[/bold cyan] {author}\n"
-            f"[bold cyan]⏱️ Duration:[/bold cyan] {format_duration(duration)}\n"
-            f"[bold cyan]👀 Views:[/bold cyan] {views:,}"
-        )
+        lines = [
+            f"[bold cyan]📹 Title:[/bold cyan] {title}",
+            f"[bold cyan]👤 Author:[/bold cyan] {author}",
+            f"[bold cyan]⏱️ Duration:[/bold cyan] {format_duration(duration)}",
+            f"[bold cyan]👀 Views:[/bold cyan] {views:,}",
+        ]
+        if max_res:
+            lines.append(f"[bold cyan]🎯 Max Resolution:[/bold cyan] [bold green]{max_res}[/bold green]")
+        info_text = "\n".join(lines)
         content.update(info_text)
         
     def clear_info(self):

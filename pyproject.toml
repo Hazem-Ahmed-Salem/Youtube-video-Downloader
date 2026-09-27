@@ -24,11 +24,12 @@ dependencies = [
     "propcache==0.4.1",
     "pygments==2.19.2",
     "pytube==15.0.0",
-    "pytubefix==10.2.1",
+    "pytubefix==10.11.0",
     "rich==14.2.0",
     "termcolor==3.2.0",
     "textual==7.3.0",
     "typing-extensions==4.15.0",
     "uc-micro-py==1.0.3",
     "yarl==1.22.0",
+    "yt-dlp>=2024.8.0",
 ]

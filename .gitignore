@@ -4,4 +4,6 @@ venv
 .env
 youtube_downloads
 __pycache__/
-
+problem_and_solution.md
+.ruff_cache/
+project_explain.md
